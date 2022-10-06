@@ -3,6 +3,7 @@ import numpy as np
 from scipy.stats import qmc
 import matplotlib.pyplot as plt
 from models.model_trainer import ModelTrainer
+from models.multi_fidelity_deep_gp import MultiFidelityDeepGPTrainer as DeepTrainer
 
 import os
 
@@ -37,6 +38,7 @@ fl = [fl1, fl2, fl3]
 
 
 
+
 def plot_gp(x, mu, var, color, label, ax=None):
     if ax:
         ax.plot(x, mu, color=color, lw=2, label=label)
@@ -54,8 +56,8 @@ def plot_gp(x, mu, var, color, label, ax=None):
 
 def plot(m, m2=None):
     xtest = np.linspace(0, 1, 100)[:, None]
-
-    f, axes = plt.subplots(1, 2, figsize=(18, 4))
+    
+    f, axes = plt.subplots(1, 3, figsize=(18, 4))
     axes = axes
 
     for i in range(len(axes)):
@@ -72,87 +74,75 @@ def plot(m, m2=None):
     plt.show()
 
 
-
 if __name__ == "__main__":
-    num_lo_fi = 20
-    num_lo_fi2 = 30
+    num_lo_fi = 10
     num_hi_fi = 6
 
     sampler = qmc.LatinHypercube(d=1)
-    sample_hf = 1-sampler.random(n=num_hi_fi).transpose()[0]*0.5
-    # sample_hf = np.array([0.1833351,  0.03447252, 0.31511198, 0.43884945, 0.96527107, 0.77349909, 0.60171152, 0.55406844, 0.85347925, 0.28409468])
+    sample_hf = sampler.random(n=num_hi_fi).transpose()[0]
     sample_lf = sampler.random(n=num_lo_fi).transpose()[0]
-    sample_lf2  = sampler.random(n=num_lo_fi2-num_lo_fi).transpose()[0]
-    sample_lf2 = np.concatenate([sample_lf, sample_lf2])
-
 
     xl = sample_lf.reshape(sample_lf.shape[0], 1)
-    xl2 = sample_lf2.reshape(sample_lf2.shape[0], 1)
     xh = sample_hf.reshape(sample_hf.shape[0], 1)
-
-
 
     X = np.vstack((
             np.hstack((xl, np.zeros_like(xl), np.zeros_like(xl))),
             np.hstack((xl, np.ones_like(xl), np.zeros_like(xl))),
-            # np.hstack((xl, np.ones_like(xl) * 2, np.zeros_like(xl))),
+            np.hstack((xl, np.ones_like(xl) * 2, np.zeros_like(xl))),
             np.hstack((xh, np.zeros_like(xh), np.ones_like(xh))),
             np.hstack((xh, np.ones_like(xh), np.ones_like(xh))),
-            # np.hstack((xh, np.ones_like(xh) * 2, np.ones_like(xh)))
+            np.hstack((xh, np.ones_like(xh) * 2, np.ones_like(xh)))
     ))
 
     Y = np.vstack((
             np.hstack((fl1(xl), np.zeros_like(xl), np.zeros_like(xl))),
             np.hstack((fl2(xl), np.ones_like(xl), np.zeros_like(xl))),
-            # np.hstack((fl3(xl), np.ones_like(xl) * 2, np.zeros_like(xl))),
+            np.hstack((fl3(xl), np.ones_like(xl) * 2, np.zeros_like(xl))),
             np.hstack((fh1(xh), np.zeros_like(xh), np.ones_like(xh))),
             np.hstack((fh2(xh), np.ones_like(xh), np.ones_like(xh))),
-            # np.hstack((fh3(xh), np.ones_like(xh) * 2, np.ones_like(xh)))
+            np.hstack((fh3(xh), np.ones_like(xh) * 2, np.ones_like(xh)))
     ))
 
-
-    X2 = np.vstack((
-            np.hstack((xl2, np.zeros_like(xl2), np.zeros_like(xl2))),
-            np.hstack((xl2, np.ones_like(xl2), np.zeros_like(xl2))),
-            # np.hstack((xl2, np.ones_like(xl2) * 2, np.zeros_like(xl2))),
-            np.hstack((xh, np.zeros_like(xh), np.ones_like(xh))),
-            np.hstack((xh, np.ones_like(xh), np.ones_like(xh))),
-            # np.hstack((xh, np.ones_like(xh) * 2, np.ones_like(xh)))
-    ))
-
-    Y2 = np.vstack((
-            np.hstack((fl1(xl2), np.zeros_like(xl2), np.zeros_like(xl2))),
-            np.hstack((fl2(xl2), np.ones_like(xl2), np.zeros_like(xl2))),
-            # np.hstack((fl3(xl2), np.ones_like(xl2) * 2, np.zeros_like(xl2))),
-            np.hstack((fh1(xh), np.zeros_like(xh), np.ones_like(xh))),
-            np.hstack((fh2(xh), np.ones_like(xh), np.ones_like(xh))),
-            # np.hstack((fh3(xh), np.ones_like(xh) * 2, np.ones_like(xh)))
-    ))
-
-    model_name = 'multi-fidelity-gp'
-    base_kernel = 'NeuralNetwork'
+    model_name = 'DGP'
+    base_kernel = 'RBF'
     likelihood_name = 'Gaussian'
-    # tf.config.run_functions_eagerly(True)  # currently there's a bug where this must be true for tf.gather_nd to work
 
-    trainer = ModelTrainer(
-        model_name=model_name,
-        optimizer_name='scipy',
-        kernel_names=[base_kernel, 'Coregion'],
-        likelihood_name=likelihood_name,
-        X=X,
-        Y=Y,
-        num_outputs=2
-    )
-    trainer.train_model()
+    # trainer = ModelTrainer(
+    #     data=(X, Y),
+    #     optimizer_name='scipy',
+    #     num_outputs=3
+    # )
+    # trainer.construct_model(
+    #     model_names=model_name,
+    #     base_kernel=base_kernel,
+    #     likelihood_name=likelihood_name
+    # )
+    # trainer.train_model()
 
-    trainer2 = ModelTrainer(
-        model_name=model_name,
+    deep_trainer = DeepTrainer(
+        data=(X, Y),
         optimizer_name='scipy',
-        kernel_names=[base_kernel, 'Coregion'],
-        likelihood_name=likelihood_name,
-        X=X2,
-        Y=Y2,
-        num_outputs=2
+        num_outputs=3
     )
-    trainer2.train_model()
-    plot(trainer, trainer2)
+
+    deep_trainer.construct_model(
+        model_names=['VGP', 'VGP'],
+        base_kernel=base_kernel,
+        likelihood_name=likelihood_name
+    )
+
+    deep_trainer.train_deep_model()
+
+
+    # trainer2 = ModelTrainer(
+    #     model_name=model_name,
+    #     optimizer_name='scipy',
+    #     kernel_names=[base_kernel, 'Coregion'],
+    #     likelihood_name=likelihood_name,
+    #     X=X2,
+    #     Y=Y2,
+    #     num_outputs=2
+    # )
+    # trainer2.train_model()
+    plot(deep_trainer)
+
