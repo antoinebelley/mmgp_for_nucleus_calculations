@@ -4,7 +4,7 @@ import tensorflow as tf
 import copy
 import tensorflow_probability as tfp
 
-from models.multi_task_gp import MultiTaskGP
+from .multi_task_gp import MultiTaskGP
 
 
 class DiffModel(gpf.models.GPModel, gpf.models.InternalDataTrainingLossMixin):

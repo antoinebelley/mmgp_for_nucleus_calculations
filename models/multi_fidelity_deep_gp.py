@@ -6,7 +6,7 @@ import tensorflow as tf
 import numpy as np
 from gpflow.base import TensorLike
 
-from kernels.neural_network_kernel import NeuralNetKernel
+from ..kernels.neural_network_kernel import NeuralNetKernel
 
 from .model_trainer import ModelTrainer
 
@@ -34,12 +34,13 @@ class MultiFidelityDeepGPTrainer(ModelTrainer):
 
         tf.config.run_functions_eagerly(True)  # currently there's a bug where this needs to be enabled for gather_nd
         # This turns X and Y into ((num_examples x num_outputs) x 2) separated by labels
-        self.Xs = [X[:, :-1]]
-        self.Ys = [Y[:, :-1]]
-        for i in range(self.num_layers - 1):
-            self.Xs.append(tf.gather_nd(indices=tf.where(X[:, -1] > i), params=X[:, :-1]))
-            self.Ys.append(tf.gather_nd(indices=tf.where(Y[:, -1] > i), params=Y[:, :-1]))
-
+        # self.Xs = [X[:, :-1]]
+        # self.Ys = [Y[:, :-1]]
+        self.Xs = []
+        self.Ys = []
+        for i in range(self.num_layers):
+            self.Xs.append(tf.gather_nd(indices=tf.where(X[:, -1] == i), params=X[:, :-1]))
+            self.Ys.append(tf.gather_nd(indices=tf.where(Y[:, -1] == i), params=Y[:, :-1]))
         tf.config.run_functions_eagerly(False)  # turn this back off for performance
 
         self.trained_models = []
@@ -58,7 +59,11 @@ class MultiFidelityDeepGPTrainer(ModelTrainer):
         assert len(model_names) == self.num_layers
 
         deep_kernels = self.get_deep_kernel(base_kernel)
-        self.kernels = [self.get_kernel(base_kernel)] + deep_kernels
+        self.kernels.append(self.get_kernel(base_kernel))
+        self.kernels.extend(deep_kernels)
+
+        for i, kernel in enumerate(self.kernels[:-1]):
+            self.kernels[i] +=  gpf.kernels.White()
 
         likelihood = gpf.likelihoods.SwitchedLikelihood(
             [self.get_likelihood(likelihood_name) for _ in range(self.num_outputs)])
@@ -80,10 +85,13 @@ class MultiFidelityDeepGPTrainer(ModelTrainer):
             self.train_model(model=model)
             print(f"Done training model {i + 1}!")
             self.trained_models.append(model)
-            if i < self.num_layers - 1:
+            if i <self.num_layers-1:
                 mu, _ = model.predict_f(self.Xs[i + 1])
-                self.Xs[i + 1] = tf.concat((self.Xs[i + 1], mu), axis=1)
-
+                if i == 0:
+                    self.Xs[i + 1] = tf.concat((self.Xs[i + 1], mu), axis=1)
+                else :
+                    self.Xs[i + 1] =tf.concat((self.Xs[:, :-1], mu), axis=1)
+            
     def predict(self, X_test):
         """
         Predicts the mean and variance of a deep model.
@@ -104,13 +112,25 @@ class MultiFidelityDeepGPTrainer(ModelTrainer):
         :return: A list of kernels, one for each layer past the first
         """
         kernels = []
-        for i in range(self.num_layers - 1):
-            coreg = gpf.kernels.Coregion(output_dim=self.num_outputs, rank=self.num_dim, active_dims=[self.num_dim])
-            coreg.W = np.random.rand(self.num_outputs, self.num_dim)
+        for i in range(1,self.num_layers):
+            rank = self.num_outputs
+            coreg = gpf.kernels.Coregion(output_dim=self.num_outputs, rank=rank, active_dims=[self.num_dim])
+            coreg.W = np.random.rand(self.num_outputs, rank)
+            range_D = list(range(self.num_dim+1))
             if kernel_name == 'RBF':
                 kernels.append(
-                    (gpf.kernels.RBF(active_dims=[self.num_dim + 1]) * gpf.kernels.RBF(active_dims=list(range(self.num_layers - 1)))
-                     + gpf.kernels.RBF(active_dims=list(range(self.num_layers - 1)))) * coreg)
+                        (
+                            gpf.kernels.RBF(active_dims=range_D[:self.num_dim]) 
+                            * 
+                            (   
+                                gpf.kernels.Linear(active_dims=[range_D[-1]]) 
+                                +
+                                gpf.kernels.RBF(active_dims=[range_D[-1]])
+                            )
+                            + gpf.kernels.RBF(active_dims=range_D[:self.num_dim])
+                        ) 
+                        * coreg
+                    )
             elif kernel_name == 'NeuralNetwork':
                 kernels.append((NeuralNetKernel(base_kernel=gpf.kernels.RBF(), active_dims=[self.num_dim + 1])
                                 * NeuralNetKernel(base_kernel=gpf.kernels.RBF(), active_dims=list(range(self.num_layers - 1)))

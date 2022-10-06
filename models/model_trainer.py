@@ -6,11 +6,11 @@ from .multi_task_gp import MultiTaskGP
 from .difference_model import DiffModel
 from .multi_fidelity_gp import MultiFidelityGP
 
-from kernels.neural_network_kernel import NeuralNetKernel
+from ..kernels.neural_network_kernel import NeuralNetKernel
 
 
 class ModelTrainer:
-    MAXITER = 10000
+    MAXITER = 1000000
 
     VALID_MODEL_NAMES = ['multi-task-gp', 'VGP', 'GPR', 'GPMC', 'difference']
     VALID_OPTIMIZERS = ['scipy']
@@ -54,13 +54,15 @@ class ModelTrainer:
         raise Exception(
             f"Please enter a valid likelihood name. {likelihood_name} is not in {self.VALID_LIKELIHOOD_NAMES}.")
 
-    def get_kernel(self, kernel_name: str) -> gpf.kernels.Kernel:
-        coreg = gpf.kernels.Coregion(output_dim=self.num_outputs, rank=self.num_dim, active_dims=[self.num_dim])
-        coreg.W = np.random.rand(self.num_outputs, self.num_dim)
+    def get_kernel(self, kernel_name: str, active_dims=None) -> gpf.kernels.Kernel:
+        rank = self.num_outputs
+        coreg = gpf.kernels.Coregion(output_dim=self.num_outputs, rank=rank, active_dims=[self.num_dim])
+        coreg.W = np.random.rand(self.num_outputs, self.num_outputs)
         if isinstance(kernel_name, gpf.kernels.Kernel):
             return kernel_name
+        if active_dims == None: active_dims = list(range(self.num_dim))
         if kernel_name == 'RBF':
-            return gpf.kernels.RBF(active_dims=list(range(self.num_layers - 1))) * coreg
+            return gpf.kernels.RBF(active_dims=active_dims) * coreg
         if kernel_name == 'Matern12':
             return gpf.kernels.Matern12(active_dims=list(range(self.num_layers - 1))) * coreg
         if kernel_name == 'Matern32':

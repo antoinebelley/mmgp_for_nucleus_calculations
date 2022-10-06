@@ -4,6 +4,7 @@ from scipy.stats import qmc
 import matplotlib.pyplot as plt
 from models.model_trainer import ModelTrainer
 from models.multi_fidelity_deep_gp import MultiFidelityDeepGPTrainer as DeepTrainer
+from gpflow.utilities import print_summary
 
 import os
 
@@ -56,7 +57,7 @@ def plot_gp(x, mu, var, color, label, ax=None):
 
 def plot(m, m2=None):
     xtest = np.linspace(0, 1, 100)[:, None]
-    
+
     f, axes = plt.subplots(1, 3, figsize=(18, 4))
     axes = axes
 
@@ -75,15 +76,20 @@ def plot(m, m2=None):
 
 
 if __name__ == "__main__":
-    num_lo_fi = 10
-    num_hi_fi = 6
+    num_lo_fi = 50
+    num_lo_fi2 = 100
+    num_hi_fi = 10
 
     sampler = qmc.LatinHypercube(d=1)
-    sample_hf = sampler.random(n=num_hi_fi).transpose()[0]
+    sample_hf = 1-0.5*sampler.random(n=num_hi_fi).transpose()[0]
     sample_lf = sampler.random(n=num_lo_fi).transpose()[0]
+    sample_lf2 = sampler.random(n=num_lo_fi2-num_lo_fi).transpose()[0]
+    sample_lf2 = np.concatenate([sample_lf, sample_lf2])
 
     xl = sample_lf.reshape(sample_lf.shape[0], 1)
+    xl2 = sample_lf2.reshape(sample_lf2.shape[0], 1)
     xh = sample_hf.reshape(sample_hf.shape[0], 1)
+    xh2 = xh.copy()
 
     X = np.vstack((
             np.hstack((xl, np.zeros_like(xl), np.zeros_like(xl))),
@@ -103,21 +109,40 @@ if __name__ == "__main__":
             np.hstack((fh3(xh), np.ones_like(xh) * 2, np.ones_like(xh)))
     ))
 
-    model_name = 'DGP'
+    X2 = np.vstack((
+            np.hstack((xl2, np.zeros_like(xl2), np.zeros_like(xl2))),
+            np.hstack((xl2, np.ones_like(xl2), np.zeros_like(xl2))),
+            np.hstack((xl2, np.ones_like(xl2) * 2, np.zeros_like(xl2))),
+            np.hstack((xh2, np.zeros_like(xh2), np.ones_like(xh2))),
+            np.hstack((xh2, np.ones_like(xh2), np.ones_like(xh2))),
+            np.hstack((xh2, np.ones_like(xh2) * 2, np.ones_like(xh2)))
+    ))
+
+    Y2 = np.vstack((
+            np.hstack((fl1(xl2), np.zeros_like(xl2), np.zeros_like(xl2))),
+            np.hstack((fl2(xl2), np.ones_like(xl2), np.zeros_like(xl2))),
+            np.hstack((fl3(xl2), np.ones_like(xl2) * 2, np.zeros_like(xl2))),
+            np.hstack((fh1(xh2), np.zeros_like(xh2), np.ones_like(xh2))),
+            np.hstack((fh2(xh2), np.ones_like(xh2), np.ones_like(xh2))),
+            np.hstack((fh3(xh2), np.ones_like(xh2) * 2, np.ones_like(xh2)))
+    ))
+
+    model_name1 = 'DGP'
+    model_name = 'multi-fidelity-gp'
     base_kernel = 'RBF'
     likelihood_name = 'Gaussian'
 
-    # trainer = ModelTrainer(
-    #     data=(X, Y),
-    #     optimizer_name='scipy',
-    #     num_outputs=3
-    # )
-    # trainer.construct_model(
-    #     model_names=model_name,
-    #     base_kernel=base_kernel,
-    #     likelihood_name=likelihood_name
-    # )
-    # trainer.train_model()
+    trainer = ModelTrainer(
+        data=(X, Y),
+        optimizer_name='scipy',
+        num_outputs=3
+    )
+    trainer.construct_model(
+        model_names=model_name,
+        base_kernel=base_kernel,
+        likelihood_name=likelihood_name
+    )
+    trainer.train_model()
 
     deep_trainer = DeepTrainer(
         data=(X, Y),
@@ -134,15 +159,17 @@ if __name__ == "__main__":
     deep_trainer.train_deep_model()
 
 
-    # trainer2 = ModelTrainer(
-    #     model_name=model_name,
-    #     optimizer_name='scipy',
-    #     kernel_names=[base_kernel, 'Coregion'],
-    #     likelihood_name=likelihood_name,
-    #     X=X2,
-    #     Y=Y2,
-    #     num_outputs=2
-    # )
-    # trainer2.train_model()
+    trainer2 = ModelTrainer(
+        data=(X2, Y2),
+        optimizer_name='scipy',
+        num_outputs=3
+    )
+    trainer2.construct_model(
+        model_names=model_name,
+        base_kernel=base_kernel,
+        likelihood_name=likelihood_name
+    )
+    trainer2.train_model()
+    
     plot(deep_trainer)
 
