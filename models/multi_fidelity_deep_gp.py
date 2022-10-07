@@ -90,7 +90,7 @@ class MultiFidelityDeepGPTrainer(ModelTrainer):
                 if i == 0:
                     self.Xs[i + 1] = tf.concat((self.Xs[i + 1], mu), axis=1)
                 else :
-                    self.Xs[i + 1] =tf.concat((self.Xs[:, :-1], mu), axis=1)
+                    self.Xs[i + 1] = tf.concat((self.Xs[:, :-1], mu), axis=1)
             
     def predict(self, X_test):
         """
