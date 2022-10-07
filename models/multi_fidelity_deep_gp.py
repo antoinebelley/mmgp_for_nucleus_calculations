@@ -116,7 +116,7 @@ class MultiFidelityDeepGPTrainer(ModelTrainer):
             rank = self.num_outputs
             coreg = gpf.kernels.Coregion(output_dim=self.num_outputs, rank=rank, active_dims=[self.num_dim])
             coreg.W = np.random.rand(self.num_outputs, rank)
-            range_D = list(range(self.num_dim+1))
+            range_D = list(range(self.num_dim+2))
             if kernel_name == 'RBF':
                 kernels.append(
                         (

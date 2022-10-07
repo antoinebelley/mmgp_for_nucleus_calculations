@@ -72,7 +72,7 @@ class ModelTrainer:
         if kernel_name == 'ArcCosine':
             return gpf.kernels.ArcCosine(active_dims=list(range(self.num_layers - 1))) * coreg
         if kernel_name == 'NeuralNetwork':
-            return NeuralNetKernel(base_kernel=gpf.kernels.RBF(), active_dims=list(range(self.num_layers - 1))) * coreg
+            return NeuralNetKernel(base_kernel=gpf.kernels.RBF(), active_dims=active_dims) * coreg
         if kernel_name == 'White':
             return gpf.kernels.White()
         raise Exception(
