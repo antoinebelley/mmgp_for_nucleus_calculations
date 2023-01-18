@@ -6,7 +6,7 @@ import tensorflow as tf
 import numpy as np
 from gpflow.base import TensorLike
 
-from models.model_trainer import ModelTrainer
+from ..models.model_trainer import ModelTrainer
 
 
 class MultiFidelityDeepGPTrainer(ModelTrainer):
@@ -34,11 +34,15 @@ class MultiFidelityDeepGPTrainer(ModelTrainer):
         # This turns X and Y into ((num_examples x num_outputs) x 2) separated by labels
         # self.Xs = [X[:, :-1]]
         # self.Ys = [Y[:, :-1]]
+        # for i in range(self.num_layers - 1):
+        #     self.Xs.append(tf.gather_nd(indices=tf.where(X[:, -1] > i), params=X[:, :-1]))
+        #     self.Ys.append(tf.gather_nd(indices=tf.where(Y[:, -1] > i), params=Y[:, :-1]))
         self.Xs = []
         self.Ys = []
         for i in range(self.num_layers):
             self.Xs.append(tf.gather_nd(indices=tf.where(X[:, -1] == i), params=X[:, :-1]))
             self.Ys.append(tf.gather_nd(indices=tf.where(Y[:, -1] == i), params=Y[:, :-1]))
+
         tf.config.run_functions_eagerly(False)  # turn this back off for performance
 
         self.trained_models = []
@@ -78,7 +82,7 @@ class MultiFidelityDeepGPTrainer(ModelTrainer):
             print(f"Training Model {i + 1}...")
             self.train_model(model=model)
             self.trained_models.append(model)
-            if i <self.num_layers-1:
+            if i < self.num_layers - 1:
                 mu, _ = model.predict_f(self.Xs[i + 1])
                 self.Xs[i + 1] = tf.concat((self.Xs[i + 1], mu), axis=1)
 

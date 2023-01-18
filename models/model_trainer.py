@@ -9,11 +9,11 @@ from .multi_task_gp import MultiTaskGP
 from .difference_model import DiffModel
 from .multi_fidelity_gp import MultiFidelityGP
 
-from kernels.neural_network_kernel import NeuralNetKernel
+from ..kernels.neural_network_kernel import NeuralNetKernel
 
 
 class ModelTrainer:
-    MAXITER = 1000000
+    MAXITER = 10000
 
     VALID_MODEL_NAMES = ['multi-task-gp', 'VGP', 'GPR', 'GPMC', 'difference', 'DeepVGP']
     VALID_OPTIMIZERS = ['scipy']
@@ -60,9 +60,9 @@ class ModelTrainer:
     def get_kernel(self, kernel_name: str, active_dims: List[int] = None) -> gpf.kernels.Kernel:
         if isinstance(kernel_name, gpf.kernels.Kernel):
             return kernel_name
-        if active_dims == None: active_dims = list(range(self.num_dim))
         if kernel_name == 'RBF':
-            return gpf.kernels.RBF(active_dims=active_dims)
+            lengthscales =  np.random.rand(self.num_dim)**2
+            return gpf.kernels.RBF(active_dims=active_dims, lengthscales=lengthscales)
         if kernel_name == 'Matern12':
             return gpf.kernels.Matern12(active_dims=active_dims)
         if kernel_name == 'Matern32':

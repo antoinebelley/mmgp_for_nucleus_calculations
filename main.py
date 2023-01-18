@@ -112,10 +112,11 @@ def plot_real_data(trainer, X_test):
         axes[i].errorbar(xplot[test_indices], mean_reshaped[:, i], yerr=2 * np.sqrt(np.abs(var_reshaped[:, i])), linestyle='none')
         axes[i].set_ylabel(tasks[i], size=20)
         axes[i].set_xlabel("Samples", size=20)
-    path = f"images/{model_name}/{base_model}/{base_kernels[0]}"
-    if not os.path.isdir(path):
-        os.makedirs(path)
-    plt.savefig(f"{path}/real_{n_dims}_{num_hf_data}_{seed}_{2}")
+    plt.show()
+    # path = f"images/{model_name}/{base_model}/{base_kernels[0]}"
+    # if not os.path.isdir(path):
+    #     os.makedirs(path)
+    # plt.savefig(f"{path}/real_{n_dims}_{num_hf_data}_{seed}_{2}")
 
 
 plot_real_data(deep_trainer, X_test)
