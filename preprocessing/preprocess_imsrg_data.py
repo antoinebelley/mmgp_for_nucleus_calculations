@@ -12,7 +12,7 @@ from sklearn.preprocessing import StandardScaler
 class IMSRGPreprocessor:
     """This class takes IMSRG data and preprocesses it into the appropriate format for the models"""
     file_path: str
-    num_train_data: int
+    num_train_data: List[int]
     max_fidelity: int
     num_outputs: int
     num_x_cols: int
@@ -29,48 +29,89 @@ class IMSRGPreprocessor:
 
         df = pd.read_csv(self.file_path)
         df = self.clean_df(df)
+        df_temp = df.copy()
 
-        indices = np.random.choice(range(df.shape[0]), size=self.num_train_data, replace=False)
-        test_indices = [i for i in range(df.shape[0]) if i not in indices]
-        self.train_indices = indices
-        self.test_indices = test_indices
+        self.train_indices = []
+        self.test_indices = []
+        self.y_train_as_df = []
+        xstack = []
+        ystack = []
+        self.X_test = []
+        self.Y_test = []
+        self.scaler = []
+        for j, num_data in enumerate(self.num_train_data):
+            indices = np.random.choice(df_temp.shape[0], size=num_data, replace=False)
+            rows = df_temp.iloc[indices,:]
+            indices = rows[self.tasks[str(j)]].dropna(axis=0).index
+            test_indices = np.array([i for i in range(df.shape[0]) if i not in indices])
+            self.train_indices.append(indices)
+            self.test_indices.append(test_indices)
 
-        x = df.iloc[:, 1:self.num_x_cols + 1]
-        x_train = x.iloc[indices, :]
-        x_test = x.iloc[test_indices, :]
+            df_temp = df_temp.loc[indices]
+            x = df.iloc[:, :self.num_x_cols]
+            x_train = x.iloc[indices, :]
+            y_cols = self.tasks[str(j)]
+            y = df[y_cols]
+            self.Y_test.append(y)
+            y_train = y.iloc[indices, :]
+            self.y_train_as_df.append(y_train)
+            x_train = np.array(x_train)
+            x = np.array(x)
+            scaler, x_train, x_test = self.scale_data(x_train, x)
+            self.scaler.append(scaler)
 
-        x, x_train, x_test = self.scale_data(x, x_train, x_test)
-        if self.num_pca_dims is not None:
-            x, x_train, x_test = self.perform_pca(x, x_train, x_test)
+            xstack.extend([np.hstack((x_train, np.ones((x_train.shape[0], 1)) * i, np.ones((x_train.shape[0], 1)) * j)) for i in range(self.num_outputs)])
+            ystack.extend([np.hstack((np.reshape(np.array(y_train[self.tasks[str(j)][i]]), (y_train.shape[0], 1)), np.ones((y_train.shape[0], 1)) * i,
+                np.ones((y_train.shape[0], 1)) * j)) for i in range(self.num_outputs)]) 
+            self.X_test.append(np.vstack([
+                np.hstack((x_test, np.ones((x_test.shape[0], 1)) * i)) for i in range(self.num_outputs)
+                ]))
+        self.X_train = np.vstack(xstack)
+        self.Y_train = np.vstack(ystack)
+    
+        
+        # indices = np.random.choice(range(df.shape[0]), size=self.num_train_data, replace=False)
+        # test_indices = [i for i in range(df.shape[0]) if i not in indices]
+        # self.train_indices = indices
+        # self.test_indices = test_indices
 
-        y_cols = np.concatenate([value for value in self.tasks.values()])
-        y = df[y_cols]
-        y_train = y.iloc[indices, :]
-        self.y_train_as_df = y_train
+        # x = df.iloc[:, 1:self.num_x_cols + 1]
+        # x_train = x.iloc[indices, :]
+        # x_test = x.iloc[test_indices, :]
 
-        self.X_train = np.vstack(
-            [np.hstack((x, np.ones((x.shape[0], 1)) * i, np.ones((x.shape[0], 1)) * j))
-             if j < self.max_fidelity - 1 else
-             np.hstack((x_train, np.ones((x_train.shape[0], 1)) * i, np.ones((x_train.shape[0], 1)) * j))
-             for j in range(self.max_fidelity) for i in range(self.num_outputs)]
-        )
+        # x, x_train, x_test = self.scale_data(x, x_train, x_test)
+        # if self.num_pca_dims is not None:
+        #     x, x_train, x_test = self.perform_pca(x, x_train, x_test)
 
-        self.Y_train = np.vstack([
-            np.hstack(
-                (np.reshape(np.array(y[self.tasks[str(j)][i]]), (y.shape[0], 1)), np.ones((y.shape[0], 1)) * i,
-                 np.ones((y.shape[0], 1)) * j)) if j < self.max_fidelity - 1 else
-            np.hstack((np.reshape(np.array(y_train[self.tasks[str(j)][i]]), (y_train.shape[0], 1)), np.ones((y_train.shape[0], 1)) * i,
-                       np.ones((y_train.shape[0], 1)) * j))
-            for j in range(self.max_fidelity) for i in range(self.num_outputs)
-        ])
+        # y_cols = np.concatenate([value for value in self.tasks.values()])
+        # y = df[y_cols]
+        # y_train = y.iloc[indices, :]
+        # self.y_train_as_df = y_train
 
-        self.X_test = np.vstack([
-            np.hstack((x_test, np.ones((x_test.shape[0], 1)) * i)) for i in range(self.num_outputs)
-        ])
+        # self.X_train = np.vstack(
+        #     [np.hstack((x, np.ones((x.shape[0], 1)) * i, np.ones((x.shape[0], 1)) * j))
+        #      if j < self.max_fidelity - 1 else
+        #      np.hstack((x_train, np.ones((x_train.shape[0], 1)) * i, np.ones((x_train.shape[0], 1)) * j))
+        #      for j in range(self.max_fidelity) for i in range(self.num_outputs)]
+        # )
 
-        self.Y_test = y.iloc[test_indices, :]
+        # self.Y_train = np.vstack([
+        #     np.hstack(
+        #         (np.reshape(np.array(y[self.tasks[str(j)][i]]), (y.shape[0], 1)), np.ones((y.shape[0], 1)) * i,
+        #          np.ones((y.shape[0], 1)) * j)) if j < self.max_fidelity - 1 else
+        #     np.hstack((np.reshape(np.array(y_train[self.tasks[str(j)][i]]), (y_train.shape[0], 1)), np.ones((y_train.shape[0], 1)) * i,
+        #                np.ones((y_train.shape[0], 1)) * j))
+        #     for j in range(self.max_fidelity) for i in range(self.num_outputs)
+        # ])
 
-    def perform_pca(self, x, x_train, x_test):
+        # self.X_test = np.vstack([
+        #     np.hstack((x_test, np.ones((x_test.shape[0], 1)) * i)) for i in range(self.num_outputs)
+        # ])
+        # print(self.X_test.shape)
+
+        # self.Y_test = y.iloc[test_indices, :]
+
+    def perform_pca(self, x, X_train, X_test):
         """
         Perform PCA to reduce dimensionality of the parameter space
         :param x: The full dataset
@@ -87,7 +128,7 @@ class IMSRGPreprocessor:
 
         return x, x_train, x_test
 
-    def scale_data(self, x, x_train, x_test):
+    def scale_data(self, x_train, x_test):
         """
         Scales the data
         :param x: The full dataset
@@ -99,8 +140,7 @@ class IMSRGPreprocessor:
         scaler.fit(x_train)
         x_train = scaler.transform(x_train)
         x_test = scaler.transform(x_test)
-        x = scaler.transform(x)
-        return x, x_train, x_test
+        return scaler, x_train, x_test
 
     def clean_df(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -111,7 +151,7 @@ class IMSRGPreprocessor:
         x_cols = list(df.columns)[1:self.num_x_cols + 1]
         tasks = np.concatenate([value for value in self.tasks.values()])
         df = df[x_cols + list(tasks)]
-        return df.dropna(axis=0)
+        return df
 
     def get_training_data(self):
         return self.X_train, self.Y_train
