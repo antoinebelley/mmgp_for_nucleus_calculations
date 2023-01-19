@@ -29,6 +29,7 @@ class IMSRGPreprocessor:
 
         df = pd.read_csv(self.file_path)
         df = self.clean_df(df)
+        
         df_temp = df.copy()
 
         self.train_indices = []
@@ -40,21 +41,29 @@ class IMSRGPreprocessor:
         self.Y_test = []
         self.scaler = []
         for j, num_data in enumerate(self.num_train_data):
-            indices = np.random.choice(df_temp.shape[0], size=num_data, replace=False)
-            rows = df_temp.iloc[indices,:]
-            indices = rows[self.tasks[str(j)]].dropna(axis=0).index
-            test_indices = np.array([i for i in range(df.shape[0]) if i not in indices])
+            indices = np.random.choice(df_temp.index, size=num_data, replace=False)
+            indices = np.sort(indices)
+            df_temp = df_temp.loc[indices]
+
+            y_cols = self.tasks[str(j)]
+            y = df[y_cols]
+            index_na = np.where(y.isna())[0][::self.num_outputs]
+            index_na = index_na
+            self.Y_test.append(y)
+            y_train = y.loc[indices]
+            y_train = y_train[~y_train.index.isin(index_na)]
+            self.y_train_as_df.append(y_train)
+            x = df.iloc[:, :self.num_x_cols]
+            x_train = x.loc[indices]
+            x_train = x_train[~x_train.index.isin(index_na)]
+            
+            #Save the indices that where used for x_train and x_test
+            indices = np.array(x_train.index)
+            test_indices = np.array([i for i in df_temp.index if i not in indices])
             self.train_indices.append(indices)
             self.test_indices.append(test_indices)
 
-            df_temp = df_temp.loc[indices]
-            x = df.iloc[:, :self.num_x_cols]
-            x_train = x.iloc[indices, :]
-            y_cols = self.tasks[str(j)]
-            y = df[y_cols]
-            self.Y_test.append(y)
-            y_train = y.iloc[indices, :]
-            self.y_train_as_df.append(y_train)
+            #Scale x_train and x_test
             x_train = np.array(x_train)
             x = np.array(x)
             scaler, x_train, x_test = self.scale_data(x_train, x)
