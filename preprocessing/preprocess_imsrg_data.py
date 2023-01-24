@@ -44,18 +44,18 @@ class IMSRGPreprocessor:
             indices = np.random.choice(df_temp.index, size=num_data, replace=False)
             indices = np.sort(indices)
             df_temp = df_temp.loc[indices]
-
             y_cols = self.tasks[str(j)]
             y = df[y_cols]
+           
+            
             index_na = np.where(y.isna())[0][::self.num_outputs]
-            index_na = index_na
-            self.Y_test.append(y)
             y_train = y.loc[indices]
             y_train = y_train[~y_train.index.isin(index_na)]
-            self.y_train_as_df.append(y_train)
+            
             x = df.iloc[:, :self.num_x_cols]
             x_train = x.loc[indices]
             x_train = x_train[~x_train.index.isin(index_na)]
+
             
             #Save the indices that where used for x_train and x_test
             indices = np.array(x_train.index)
@@ -68,59 +68,24 @@ class IMSRGPreprocessor:
             x = np.array(x)
             scaler, x_train, x_test = self.scale_data(x_train, x)
             self.scaler.append(scaler)
-
+            y_mean = y.mean(axis=0)
+            y_std = y.std(axis=0)
+            y_train = (y_train - y_mean) / y_std
+            y = (y - y_mean) / y_std
+            self.y_train_as_df.append(y_train)
+            self.Y_test.append(y)
+            #Format the arrays to be compatible with GpFLow
             xstack.extend([np.hstack((x_train, np.ones((x_train.shape[0], 1)) * i, np.ones((x_train.shape[0], 1)) * j)) for i in range(self.num_outputs)])
             ystack.extend([np.hstack((np.reshape(np.array(y_train[self.tasks[str(j)][i]]), (y_train.shape[0], 1)), np.ones((y_train.shape[0], 1)) * i,
                 np.ones((y_train.shape[0], 1)) * j)) for i in range(self.num_outputs)]) 
             self.X_test.append(np.vstack([
                 np.hstack((x_test, np.ones((x_test.shape[0], 1)) * i)) for i in range(self.num_outputs)
                 ]))
+        #Stack arrays of all fidelities
         self.X_train = np.vstack(xstack)
         self.Y_train = np.vstack(ystack)
-    
-        
-        # indices = np.random.choice(range(df.shape[0]), size=self.num_train_data, replace=False)
-        # test_indices = [i for i in range(df.shape[0]) if i not in indices]
-        # self.train_indices = indices
-        # self.test_indices = test_indices
 
-        # x = df.iloc[:, 1:self.num_x_cols + 1]
-        # x_train = x.iloc[indices, :]
-        # x_test = x.iloc[test_indices, :]
-
-        # x, x_train, x_test = self.scale_data(x, x_train, x_test)
-        # if self.num_pca_dims is not None:
-        #     x, x_train, x_test = self.perform_pca(x, x_train, x_test)
-
-        # y_cols = np.concatenate([value for value in self.tasks.values()])
-        # y = df[y_cols]
-        # y_train = y.iloc[indices, :]
-        # self.y_train_as_df = y_train
-
-        # self.X_train = np.vstack(
-        #     [np.hstack((x, np.ones((x.shape[0], 1)) * i, np.ones((x.shape[0], 1)) * j))
-        #      if j < self.max_fidelity - 1 else
-        #      np.hstack((x_train, np.ones((x_train.shape[0], 1)) * i, np.ones((x_train.shape[0], 1)) * j))
-        #      for j in range(self.max_fidelity) for i in range(self.num_outputs)]
-        # )
-
-        # self.Y_train = np.vstack([
-        #     np.hstack(
-        #         (np.reshape(np.array(y[self.tasks[str(j)][i]]), (y.shape[0], 1)), np.ones((y.shape[0], 1)) * i,
-        #          np.ones((y.shape[0], 1)) * j)) if j < self.max_fidelity - 1 else
-        #     np.hstack((np.reshape(np.array(y_train[self.tasks[str(j)][i]]), (y_train.shape[0], 1)), np.ones((y_train.shape[0], 1)) * i,
-        #                np.ones((y_train.shape[0], 1)) * j))
-        #     for j in range(self.max_fidelity) for i in range(self.num_outputs)
-        # ])
-
-        # self.X_test = np.vstack([
-        #     np.hstack((x_test, np.ones((x_test.shape[0], 1)) * i)) for i in range(self.num_outputs)
-        # ])
-        # print(self.X_test.shape)
-
-        # self.Y_test = y.iloc[test_indices, :]
-
-    def perform_pca(self, x, X_train, X_test):
+    def perform_pca(self, x, x_train, x_test):
         """
         Perform PCA to reduce dimensionality of the parameter space
         :param x: The full dataset
@@ -134,7 +99,6 @@ class IMSRGPreprocessor:
             x = pca.transform(x)
             x_train = pca.transform(x_train)
             x_test = pca.transform(x_test)
-
         return x, x_train, x_test
 
     def scale_data(self, x_train, x_test):
@@ -149,6 +113,10 @@ class IMSRGPreprocessor:
         scaler.fit(x_train)
         x_train = scaler.transform(x_train)
         x_test = scaler.transform(x_test)
+        # scaler_y = StandardScaler()
+        # scaler_y.fit(y_train)
+        # y_train = scaler_y.transform(y_train)
+        # y_test = scaler_y.transform(y_test)
         return scaler, x_train, x_test
 
     def clean_df(self, df: pd.DataFrame) -> pd.DataFrame:
