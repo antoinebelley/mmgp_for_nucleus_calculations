@@ -32,16 +32,16 @@ class MultiFidelityDeepGPTrainer(ModelTrainer):
 
         tf.config.run_functions_eagerly(True)  # currently there's a bug where this needs to be enabled for gather_nd
         # This turns X and Y into ((num_examples x num_outputs) x 2) separated by labels
-        # self.Xs = [X[:, :-1]]
-        # self.Ys = [Y[:, :-1]]
-        # for i in range(self.num_layers - 1):
-        #     self.Xs.append(tf.gather_nd(indices=tf.where(X[:, -1] > i), params=X[:, :-1]))
-        #     self.Ys.append(tf.gather_nd(indices=tf.where(Y[:, -1] > i), params=Y[:, :-1]))
-        self.Xs = []
-        self.Ys = []
-        for i in range(self.num_layers):
-            self.Xs.append(tf.gather_nd(indices=tf.where(X[:, -1] == i), params=X[:, :-1]))
-            self.Ys.append(tf.gather_nd(indices=tf.where(Y[:, -1] == i), params=Y[:, :-1]))
+        self.Xs = [X[:, :-1]]
+        self.Ys = [Y[:, :-1]]
+        for i in range(self.num_layers - 1):
+            self.Xs.append(tf.gather_nd(indices=tf.where(X[:, -1] > i), params=X[:, :-1]))
+            self.Ys.append(tf.gather_nd(indices=tf.where(Y[:, -1] > i), params=Y[:, :-1]))
+        # self.Xs = []
+        # self.Ys = []
+        # for i in range(self.num_layers):
+        #     self.Xs.append(tf.gather_nd(indices=tf.where(X[:, -1] == i), params=X[:, :-1]))
+        #     self.Ys.append(tf.gather_nd(indices=tf.where(Y[:, -1] == i), params=Y[:, :-1]))
 
         tf.config.run_functions_eagerly(False)  # turn this back off for performance
 
